@@ -7,7 +7,6 @@ import os
 from pocketsphinx import LiveSpeech, get_model_path
 
 def speech_to_text():
-    openai.api_key = os.getenv("OPENAI_API_KEY")
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 16000
