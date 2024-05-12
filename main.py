@@ -1,10 +1,18 @@
 import pyaudio
 import wave
 import openai
+from openai import OpenAI
 import audioop
 import time
 import os
 from pocketsphinx import LiveSpeech, get_model_path
+from eff_word_net.streams import SimpleMicStream
+from eff_word_net.engine import HotwordDetector
+from eff_word_net.audio_processing import Resnet50_Arc_loss
+from dimits import Dimits
+dt = Dimits("fr_FR-siwis-medium")
+
+client = OpenAI()
 
 def speech_to_text():
     API_KEY = os.getenv("OPENAI_API_KEY")
@@ -15,7 +23,7 @@ def speech_to_text():
     CHUNK = 1024
     WAVE_OUTPUT_FILENAME = "output.wav"
     THRESHOLD = 300  # Niveau pour démarrer l'enregistrement
-    SILENCE_LIMIT = 2  # Temps de silence avant d'arrêter l'enregistrement (en secondes)
+    SILENCE_LIMIT = 1.5  # Temps de silence avant d'arrêter l'enregistrement (en secondes)
     silence_count = 0
 
     audio = pyaudio.PyAudio()
@@ -28,10 +36,9 @@ def speech_to_text():
     frames = []
     
     # Détecter le niveau sonore avant de commencer à enregistrer
-    print("En attente de parole...")
     data = stream.read(CHUNK)
     audio_level = audioop.rms(data, 2)
-
+    started_recording = 0
 
     # Enregistrement de l'audio après la détection de la parole
     while True:
@@ -46,10 +53,10 @@ def speech_to_text():
             silence_count = 0
 
         # Arrêter l'enregistrement après 2 secondes de silence
-        if silence_count > (SILENCE_LIMIT * RATE / CHUNK):
+        if silence_count > (SILENCE_LIMIT * RATE / CHUNK) or started_recording > (5 * RATE / CHUNK):
             print("Silence détecté, arrêt de l'enregistrement...")
             break
-
+        started_recording+=1
     print("Fin de l'enregistrement...")
 
     stream.stop_stream()
@@ -68,36 +75,48 @@ def speech_to_text():
             model="whisper-1",
             file=audio_file
         )
-        print(transcription.text)
-
+        response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": transcription.text}
+    ]
+    )
+    print(response.choices[0].message.content)
+    dt.text_2_speech(response.choices[0].message.content, engine="aplay")
 
 
 def listen_for_keyword():
-    model_path = "/home/theo/.local/lib/python3.10/site-packages/pocketsphinx/model/en-us/"
 
-    speech = LiveSpeech(
-        verbose=False,
-        sampling_rate=16000,
-        buffer_size=2048,
-        no_search=False,
-        full_utt=False,
-        hmm=os.path.join(model_path, 'en-us/'),  # Ajuster selon le vrai chemin
-        lm=False,
-        dic=os.path.join(model_path, 'cmudict-en-us.dict'),
-        kws=os.path.join(model_path, 'keywords.list')
+
+    base_model = Resnet50_Arc_loss()
+
+    mycroft_hw = HotwordDetector(
+        hotword="jarvis",
+        model = base_model,
+        reference_file="/home/theo/jarvis/EfficientWordNet/EfficientWord-Net/wakewords/jarvis/jarvis_ref.json",
+        threshold=0.7,
+        relaxation_time=2
     )
 
-    print("En écoute pour le mot-clé 'Jarvis'...")
+    mic_stream = SimpleMicStream(
+        window_length_secs=1.5,
+        sliding_window_secs=0.75,
+    )
 
-    for phrase in speech:
-        for segment in phrase.seg():
-            print(segment.word)
-            if segment.word.lower() == 'jarvis':
-                print("Mot-clé 'Jarvis' détecté !")
-                return True
-    return False
+    mic_stream.start_stream()
+
+    print("Say jarvis ")
+    while True :
+        frame = mic_stream.getFrame()
+        result = mycroft_hw.scoreFrame(frame)
+        if result==None :
+            #no voice activity
+            continue
+        if(result["match"]):
+            print("Wakeword uttered",result["confidence"])
+            result = speech_to_text()
+            print(result)
 
 if __name__ == '__main__':
     detected = listen_for_keyword()
-    if detected:
-        speech_to_text()
