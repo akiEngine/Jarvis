@@ -10,9 +10,18 @@ from eff_word_net.streams import SimpleMicStream
 from eff_word_net.engine import HotwordDetector
 from eff_word_net.audio_processing import Resnet50_Arc_loss
 from dimits import Dimits
+from pathlib import Path
+import vlc
+
 dt = Dimits("fr_FR-siwis-medium")
 
 client = OpenAI()
+
+messages=[
+    {"role": "system", "content": "tu es mon assistant personel, tu es enjoué, peut improviser et donner des anecdotes, tu réponds à mes questions et gère ma domotique."},
+    {"role": "user", "content": "Sois conçis."}
+]
+
 
 def speech_to_text():
     API_KEY = os.getenv("OPENAI_API_KEY")
@@ -28,7 +37,7 @@ def speech_to_text():
 
     audio = pyaudio.PyAudio()
 
-    print("Initialisation de l'enregistrement...")
+    print("Init de l'enregistrement...")
 
     stream = audio.open(format=FORMAT, channels=CHANNELS,
                         rate=RATE, input=True,
@@ -75,15 +84,24 @@ def speech_to_text():
             model="whisper-1",
             file=audio_file
         )
+        messages[1] = {"role": "user", "content": transcription.text+" Sois conçis."}
         response = client.chat.completions.create(
     model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": transcription.text}
-    ]
+    messages=messages
     )
-    print(response.choices[0].message.content)
-    dt.text_2_speech(response.choices[0].message.content, engine="aplay")
+    output = response.choices[0].message.content
+    print(output)
+    response = client.audio.speech.create(
+        model="tts-1",
+        voice="nova",
+        input=output,
+    )
+
+    with open("outputtts.mp3", "wb") as f:
+        for chunk in response.iter_bytes():
+            f.write(chunk)
+
+    os.system("ffplay -v 0 -nodisp -autoexit outputtts.mp3") 
 
 
 def listen_for_keyword():
