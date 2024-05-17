@@ -3,17 +3,12 @@ import wave
 import openai
 from openai import OpenAI
 import audioop
-import time
 import os
-from pocketsphinx import LiveSpeech, get_model_path
 from eff_word_net.streams import SimpleMicStream
 from eff_word_net.engine import HotwordDetector
 from eff_word_net.audio_processing import Resnet50_Arc_loss
-from dimits import Dimits
-from pathlib import Path
 import vlc
 
-dt = Dimits("fr_FR-siwis-medium")
 
 client = OpenAI()
 
@@ -31,8 +26,8 @@ def speech_to_text():
     RATE = 16000
     CHUNK = 1024
     WAVE_OUTPUT_FILENAME = "output.wav"
-    THRESHOLD = 300  # Niveau pour démarrer l'enregistrement
-    SILENCE_LIMIT = 1.5  # Temps de silence avant d'arrêter l'enregistrement (en secondes)
+    THRESHOLD = 300  # level to start recording
+    SILENCE_LIMIT = 1.5  # time of silence before stoping recording
     silence_count = 0
 
     audio = pyaudio.PyAudio()
@@ -44,29 +39,29 @@ def speech_to_text():
                         frames_per_buffer=CHUNK)
     frames = []
     
-    # Détecter le niveau sonore avant de commencer à enregistrer
+    # Ddetect the audio level before recording
     data = stream.read(CHUNK)
     audio_level = audioop.rms(data, 2)
     started_recording = 0
 
-    # Enregistrement de l'audio après la détection de la parole
+    # recording of the audio
     while True:
         data = stream.read(CHUNK)
         audio_level = audioop.rms(data, 2)
         frames.append(data)
 
-        # Vérifier le niveau sonore pour arrêter l'enregistrement
+        # check noise level to stop recording
         if audio_level < THRESHOLD:
             silence_count += 1
         else:
             silence_count = 0
 
-        # Arrêter l'enregistrement après 2 secondes de silence
+        # stop recording if 2s silence
         if silence_count > (SILENCE_LIMIT * RATE / CHUNK) or started_recording > (5 * RATE / CHUNK):
-            print("Silence détecté, arrêt de l'enregistrement...")
+            print("Silence detected...")
             break
         started_recording+=1
-    print("Fin de l'enregistrement...")
+    print("end of recording...")
 
     stream.stop_stream()
     stream.close()
@@ -84,24 +79,25 @@ def speech_to_text():
             model="whisper-1",
             file=audio_file
         )
+    if len(transcription.text)  >3:
         messages[1] = {"role": "user", "content": transcription.text+" Sois conçis."}
         response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=messages
-    )
-    output = response.choices[0].message.content
-    print(output)
-    response = client.audio.speech.create(
-        model="tts-1",
-        voice="nova",
-        input=output,
-    )
+        model="gpt-4o",
+        messages=messages
+        )
+        output = response.choices[0].message.content
+        print(output)
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            input=output,
+        )
 
-    with open("outputtts.mp3", "wb") as f:
-        for chunk in response.iter_bytes():
-            f.write(chunk)
+        with open("outputtts.mp3", "wb") as f:
+            for chunk in response.iter_bytes():
+                f.write(chunk)
 
-    os.system("ffplay -v 0 -nodisp -autoexit outputtts.mp3") 
+        os.system("ffplay -v 0 -nodisp -autoexit outputtts.mp3") 
 
 
 def listen_for_keyword():
@@ -113,7 +109,7 @@ def listen_for_keyword():
         hotword="jarvis",
         model = base_model,
         reference_file="/home/theo/jarvis/EfficientWordNet/EfficientWord-Net/wakewords/jarvis/jarvis_ref.json",
-        threshold=0.7,
+        threshold=0.69,
         relaxation_time=2
     )
 
