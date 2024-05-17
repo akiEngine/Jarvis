@@ -8,6 +8,26 @@ from eff_word_net.streams import SimpleMicStream
 from eff_word_net.engine import HotwordDetector
 from eff_word_net.audio_processing import Resnet50_Arc_loss
 import vlc
+import paho.mqtt.client as mqtt
+
+# Configuration du client MQTT
+broker = "mqtt.example.com"
+port = 1883
+topic = "test/topic"
+message = "Hello, MQTT!"
+username = "your_username"
+password = "your_password"
+
+mqtt_client = mqtt.Client()
+
+mqtt_client.username_pw_set(username, password)
+
+mqtt_client.connect(broker, port)
+
+mqtt_client.publish(topic, message)
+
+
+
 
 
 client = OpenAI()
@@ -16,6 +36,11 @@ messages=[
     {"role": "system", "content": "tu es mon assistant personel, tu es enjoué, peut improviser et donner des anecdotes, tu réponds à mes questions et gère ma domotique."},
     {"role": "user", "content": "Sois conçis."}
 ]
+
+def pre_compute(text):
+    to_return = True
+
+    return to_return
 
 
 def speech_to_text():
@@ -39,7 +64,7 @@ def speech_to_text():
                         frames_per_buffer=CHUNK)
     frames = []
     
-    # Ddetect the audio level before recording
+    # Detect the audio level before recording
     data = stream.read(CHUNK)
     audio_level = audioop.rms(data, 2)
     started_recording = 0
@@ -79,7 +104,7 @@ def speech_to_text():
             model="whisper-1",
             file=audio_file
         )
-    if len(transcription.text)  >3:
+    if len(transcription.text) >3 and pre_compute(transcription.text):
         messages[1] = {"role": "user", "content": transcription.text+" Sois conçis."}
         response = client.chat.completions.create(
         model="gpt-4o",
@@ -105,7 +130,7 @@ def listen_for_keyword():
 
     base_model = Resnet50_Arc_loss()
 
-    mycroft_hw = HotwordDetector(
+    jarvis_hw = HotwordDetector(
         hotword="jarvis",
         model = base_model,
         reference_file="/home/theo/jarvis/EfficientWordNet/EfficientWord-Net/wakewords/jarvis/jarvis_ref.json",
@@ -123,7 +148,7 @@ def listen_for_keyword():
     print("Say jarvis ")
     while True :
         frame = mic_stream.getFrame()
-        result = mycroft_hw.scoreFrame(frame)
+        result = jarvis_hw.scoreFrame(frame)
         if result==None :
             #no voice activity
             continue
@@ -133,4 +158,9 @@ def listen_for_keyword():
             print(result)
 
 if __name__ == '__main__':
-    detected = listen_for_keyword()
+    try:
+        detected = listen_for_keyword()
+    finally:
+        # Déconnexion du client
+        mqtt_client.disconnect()
+    
