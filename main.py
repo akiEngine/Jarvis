@@ -9,7 +9,7 @@ from eff_word_net.engine import HotwordDetector
 from eff_word_net.audio_processing import Resnet50_Arc_loss
 import vlc
 import paho.mqtt.client as mqtt
-
+'''
 # Configuration du client MQTT
 broker = "mqtt.example.com"
 port = 1883
@@ -26,7 +26,7 @@ mqtt_client.connect(broker, port)
 
 mqtt_client.publish(topic, message)
 
-
+'''
 
 
 
