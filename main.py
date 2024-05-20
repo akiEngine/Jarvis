@@ -13,6 +13,7 @@ from datetime import datetime
 import argparse
 import time
 
+is_rpi = False
 broker = "192.168.1.45"  # Utilisez l'adresse de votre broker MQTT
 port = 1883
 # Configuration du client MQTT
@@ -49,7 +50,7 @@ client.disconnect()
 PP_access_key = os.getenv("PORCUPINE_API")
 
 # Paths to keyword file and model file
-keyword_paths = ['porcupine/Jarre-vis_fr_linux_v3_0_0.ppn']
+keyword_paths = ['porcupine/Jarre-vis_fr_linux_v3_0_0.ppn'] if not is_rpi else ['porcupine/jarrevis_fr_raspberry-pi_v3_0_0.ppn']
 model_path = "porcupine/porcupine_params_fr.pv"
 keywords = ["Jarre vis"]  # Liste de mots-clés à détecter
 sensitivities = [0.5] * len(keyword_paths)
