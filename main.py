@@ -11,25 +11,40 @@ import struct
 from pvrecorder import PvRecorder
 from datetime import datetime
 import argparse
+import time
 
-'''
-# Configuration du client MQTT
-broker = "mqtt.example.com"
+broker = "192.168.1.45"  # Utilisez l'adresse de votre broker MQTT
 port = 1883
+# Configuration du client MQTT
+username = "mosquitto"
+password = "mosquitto"
 topic = "test/topic"
 message = "Hello, MQTT!"
-username = "your_username"
-password = "your_password"
 
-mqtt_client = mqtt.Client()
+# Callback lors de la connexion au broker
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connecté au broker")
+    else:
+        print("Échec de la connexion, code de retour %d\n", rc)
 
-mqtt_client.username_pw_set(username, password)
+# Configuration du client MQTT
+client = mqtt.Client()
+client.username_pw_set(username, password)  # Définir le nom d'utilisateur et le mot de passe
+client.on_connect = on_connect
 
-mqtt_client.connect(broker, port)
+client.connect(broker, port)
+client.loop_start()  # Démarre la boucle pour traiter le trafic réseau en arrière-plan
+#client.publish("tv", "0")
+# Arrêt de la boucle et déconnexion
+client.loop_stop()
+client.disconnect()
 
-mqtt_client.publish(topic, message)
 
-'''
+
+#mqtt_client.publish(topic, message)
+
+
 # AccessKey obtained from Picovoice Console (https://console.picovoice.ai/)
 PP_access_key = os.getenv("PORCUPINE_API")
 
