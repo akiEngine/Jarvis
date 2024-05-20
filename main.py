@@ -4,11 +4,14 @@ import openai
 from openai import OpenAI
 import audioop
 import os
-from eff_word_net.streams import SimpleMicStream
-from eff_word_net.engine import HotwordDetector
-from eff_word_net.audio_processing import Resnet50_Arc_loss
 import vlc
 import paho.mqtt.client as mqtt
+import pvporcupine
+import struct
+from pvrecorder import PvRecorder
+from datetime import datetime
+import argparse
+
 '''
 # Configuration du client MQTT
 broker = "mqtt.example.com"
@@ -27,7 +30,26 @@ mqtt_client.connect(broker, port)
 mqtt_client.publish(topic, message)
 
 '''
+# AccessKey obtained from Picovoice Console (https://console.picovoice.ai/)
+PP_access_key = os.getenv("PORCUPINE_API")
 
+# Paths to keyword file and model file
+keyword_paths = ['porcupine/Jarre-vis_fr_linux_v3_0_0.ppn']
+model_path = "porcupine/porcupine_params_fr.pv"
+keywords = ["Jarre vis"]  # Liste de mots-clés à détecter
+sensitivities = [0.5] * len(keyword_paths)
+
+  # Create Porcupine handle
+porcupine = pvporcupine.create(
+    access_key=PP_access_key,
+    keyword_paths=keyword_paths,
+    model_path=model_path,
+    keywords = ['Jarre vis'],
+    sensitivities=sensitivities
+)
+keywords = [os.path.basename(x).replace('.ppn', '').split('_')[0] for x in keyword_paths]
+print('Porcupine version: %s' % porcupine.version)
+recorder = PvRecorder(frame_length=porcupine.frame_length, device_index=-1)
 
 
 client = OpenAI()
@@ -128,34 +150,26 @@ def speech_to_text():
 def listen_for_keyword():
 
 
-    base_model = Resnet50_Arc_loss()
+    recorder.start()
 
-    jarvis_hw = HotwordDetector(
-        hotword="jarvis",
-        model = base_model,
-        reference_file="/home/theo/jarvis/EfficientWordNet/EfficientWord-Net/wakewords/jarvis/jarvis_ref.json",
-        threshold=0.69,
-        relaxation_time=2
-    )
 
-    mic_stream = SimpleMicStream(
-        window_length_secs=1.5,
-        sliding_window_secs=0.75,
-    )
+    print('Listening ... (press Ctrl+C to exit)')
 
-    mic_stream.start_stream()
+    try:
+        while True:
+            pcm = recorder.read()
+            result = porcupine.process(pcm)
+            if result >= 0:
+                print('[%s] Detected %s' % (str(datetime.now()), keywords[result]))
+                result = speech_to_text()
+                print(result)
+    except KeyboardInterrupt:
+        print('Stopping ...')
+    finally:
+        recorder.delete()
+        porcupine.delete()
 
-    print("Say jarvis ")
-    while True :
-        frame = mic_stream.getFrame()
-        result = jarvis_hw.scoreFrame(frame)
-        if result==None :
-            #no voice activity
-            continue
-        if(result["match"]):
-            print("Wakeword uttered",result["confidence"])
-            result = speech_to_text()
-            print(result)
+
 
 if __name__ == '__main__':
     try:
